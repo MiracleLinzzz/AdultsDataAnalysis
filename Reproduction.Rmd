@@ -1,0 +1,786 @@
+---
+title: "final_project"
+author: "Xintong Liu"
+date: "2022-11-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Preprocessing
+```{r}
+# Tiffany's code
+
+# # load in dataset
+# adult <- read.csv("adult.csv")
+# 
+# # revert to factor
+# adult$workclass <- as.factor(adult$workclass)
+# adult$education <- as.factor(adult$education)
+# adult$marital.status <- as.factor(adult$marital.status)
+# adult$occupation <- as.factor(adult$occupation)
+# adult$relationship <- as.factor(adult$relationship)
+# adult$race <- as.factor(adult$race)
+# adult$sex <- as.factor(adult$sex)
+# adult$native.country <- as.factor(adult$native.country)
+# adult$income <- as.factor(adult$income)
+# str(adult)
+# 
+# # replace ? by NA
+# for(i in 1:length(adult)) {
+#   matches <- grepl("\\?", adult[ ,i])
+#   for(j in 1:length(matches)) {
+#     ifelse(matches[j] == TRUE, adult[j,i] <- "NA", matches[j])
+#   }
+# }
+# # adult$workclass <- gsub("?",NA,adult$workclass, fixed = TRUE)
+# 
+# # delete NA
+# adult <- na.omit(adult) 
+# #table(adult$workclass)
+```
+
+```{r}
+adult <- read.csv("adult2.csv")
+head(adult)
+```
+-- Work Class Combining
+
+```{r}
+table(adult$workclass)
+```
+```{r}
+adult$workclass <- as.character(adult$workclass)
+
+adult$workclass[adult$workclass == "Without-pay" | 
+                  adult$workclass == "Never-worked"] <- "Unemployed"
+
+adult$workclass[adult$workclass == "State-gov" |
+                  adult$workclass == "Local-gov"] <- "SL-gov"
+
+adult$workclass[adult$workclass == "Self-emp-inc" |
+                  adult$workclass == "Self-emp-not-inc"] <- "Self-employed"
+
+table(adult$workclass)
+```
+
+-- Marital Status Combining
+
+```{r}
+table(adult$marital.status)
+```
+```{r}
+adult$marital.status <- as.character(adult$marital.status)
+
+adult$marital.status[adult$marital.status == "Married-AF-spouse" |
+                       adult$marital.status == "Married-civ-spouse" |
+                       adult$marital.status == "Married-spouse-absent"] <- "Married"
+
+adult$marital.status[adult$marital.status == "Divorced" |
+                       adult$marital.status == "Separated" |
+                       adult$marital.status == "Widowed"] <- "Not-Married"
+table(adult$marital.status)
+```
+
+-- Country Combining
+
+```{r}
+adult$native.country <- as.character(adult$native.country)
+
+north.america <- c("Canada", "Cuba", "Dominican-Republic", "El-Salvador", "Guatemala",
+                   "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua",
+                   "Outlying-US(Guam-USVI-etc)", "Puerto-Rico", "Trinadad&Tobago",
+                   "United-States")
+asia <- c("Cambodia", "China", "Hong", "India", "Iran", "Japan", "Laos",
+          "Philippines", "Taiwan", "Thailand", "Vietnam")
+south.america <- c("Columbia", "Ecuador", "Peru")
+europe <- c("England", "France", "Germany", "Greece", "Holand-Netherlands",
+            "Hungary", "Ireland", "Italy", "Poland", "Portugal", "Scotland",
+            "Yugoslavia")
+other <- c("South", "?")
+
+adult$native.country[adult$native.country %in% north.america] <- "North America"
+adult$native.country[adult$native.country %in% asia] <- "Asia"
+adult$native.country[adult$native.country %in% south.america] <- "South America"
+adult$native.country[adult$native.country %in% europe] <- "Europe"
+adult$native.country[adult$native.country %in% other] <- "Other"
+
+table(adult$native.country)
+```
+```{r}
+adult$native.country <- as.factor(adult$native.country)
+adult$marital.status <- as.factor(adult$marital.status)
+adult$workclass <- as.factor(adult$workclass)
+head(adult)
+```
+-- Dealing with Missing Data
+
+```{r}
+table(adult$workclass)
+```
+```{r}
+adult[adult == "?"] <- NA
+table(adult$workclass)
+```
+```{r}
+# install.packages("Amelia")
+library(Amelia)
+```
+
+```{r}
+colSums(is.na(adult))
+```
+
+```{r}
+missmap(adult, y.at = 1, y.labels = "", col = c("yellow", "black"), legend = TRUE)
+```
+
+```{r}
+# method1: drop rows
+adult <- na.omit(adult)
+
+# method2: KNN (running time error?)
+# as it is observed only the following coloumns have NAs in them, we specifically perform kNN imputation on these 3 variables
+
+# library(VIM)
+# adult<-kNN(adult,variable=c("workclass","occupation"),k=sqrt(nrow(adult)))
+```
+
+```{r}
+colSums(is.na(adult))
+```
+
+```{r}
+missmap(adult, y.at = 1, y.label = "", legend = , col = c("yellow", "black"))
+```
+
+```{r}
+head(adult)
+```
+
+
+## Data Analysis
+```{r}
+# plot a histogram of ages that is colored by income
+library(ggplot2)
+ggplot(adult, aes(age)) + geom_histogram(aes(fill = income), color = "black", binwidth = 1)
+```
+From this plot we can see that the percentage of people who make above 50K peaks out at roughly 35% between ages 30 and 50.
+
+```{r}
+# plot a histogram of hours worked per week
+ggplot(adult, aes(hours.per.week)) + geom_histogram()
+```
+The highest frequency of hours.per.week occurs at 40.
+
+```{r}
+# income class by region
+library(data.table)
+setnames(adult, "native.country", "region")
+
+# Reorder factor levels by count
+region.ordered <- reorder(adult$region, adult$region, length)
+region.ordered <- factor(region.ordered, levels = rev(levels(region.ordered)))
+
+ggplot(adult, aes(region.ordered)) + geom_bar(aes(fill = income), color = "black")
+```
+```{r}
+# correlation of each factors
+pairs(~age+fnlwgt+educational.num+capital.gain+capital.loss+hours.per.week, adult)
+```
+```{r}
+# revert to factor
+adult$workclass <- as.factor(adult$workclass)
+adult$education <- as.factor(adult$education)
+adult$marital.status <- as.factor(adult$marital.status)
+adult$occupation <- as.factor(adult$occupation)
+adult$relationship <- as.factor(adult$relationship)
+adult$race <- as.factor(adult$race)
+adult$gender <- as.factor(adult$gender)
+adult$region <- as.factor(adult$region)
+adult$income <- as.factor(adult$income)
+str(adult)
+```
+
+```{r}
+# Box plot 1
+ggplot(data = adult, aes(x = income, y = hours.per.week, fill = income)) +
+        geom_boxplot() +
+        theme_bw() +
+        labs(x = "Income", y = "Hours per Week", 
+             title = "Graph 1: Boxplot for Income & Hours per Week")
+```
+```{r}
+# Box plot 2
+ggplot(data = adult, aes(x = income, y = age, fill = income)) +
+        geom_boxplot() +
+        theme_bw() +
+        labs(x = "Income", y = "Age", 
+             title = "Graph 2: Boxplot for Income & Age")
+```
+```{r}
+# Box plot 3
+ggplot(data = adult, aes(x = income, y = educational.num, fill = income)) +
+        geom_boxplot() +
+        theme_bw() +
+        labs(x = "Income", y = "Educational Num", 
+             title = "Graph 3: Boxplot for Income & Educational Num")
+```
+
+
+## Model Training
+The purpose of this model is to classify people into two groups, below 50k or above 50k in income. We will build the model using training data, and then predict the salary class using the test group.
+
+### Logistic Regression
+
+```{r}
+# build train and test data
+library(caTools)
+split <- sample.split(adult$income, SplitRatio = 0.7)
+train <- subset(adult, split == TRUE)
+test <- subset(adult, split == FALSE)
+
+# train the model
+log.model <- glm(income ~ ., family = binomial(), train)
+
+# --------------------- Predicting on train data ------------------------------
+# prediciton - confusion matrix, accuracy, recall, and precision
+prediction <- predict(log.model, train, type = "response")
+cm <- table(train$income, prediction >= 0.5)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+# prediciton - confusion matrix, accuracy, recall, and precision
+prediction <- predict(log.model, test, type = "response")
+cm <- table(test$income, prediction >= 0.5)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+
+cm
+accuracy
+recall
+precision
+```
+Logistic Regression - training
+accuracy: 0.8491761
+recall: 0.8791106
+precision: 0.9268615
+
+Logistic Regression - testing
+accuracy: 0.8437364
+recall: 0.873219
+precision: 0.9267071
+
+
+### Naive Bayes
+```{r}
+library(naivebayes)
+library(dplyr)
+library(ggplot2)
+library(psych)
+
+# train the model
+NB.model <- naive_bayes(income ~ ., data = train, usekernel = T)
+plot(NB.model)
+```
+```{r}
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(NB.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(NB.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+Naive Bayes - training
+accuracy: 0.8088012
+recall: 0.7998871
+precision: 0.9945105
+
+Naive Bayes - testing
+accuracy: 0.807386
+recall: 0.7992251
+precision: 0.9933545
+
+
+### C4.5 (decision trees)
+```{r}
+library(rJava)
+library(RWeka)
+
+# train the model
+C45.model <- J48(income ~ ., data = train)
+#summary(C45.model)
+```
+```{r}
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(C45.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(C45.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+C4.5 - training
+accuracy: 0.8798995
+recall: 0.8895522
+precision: 0.9593858
+
+C4.5 - testing
+accuracy: 0.8462708
+recall: 0.8686184
+precision: 0.9373014
+
+
+### C5.0 (newer decision trees)
+```{r}
+library(C50)
+library(printr)
+
+# train the model
+C50.model <- C5.0(income ~ ., data = train)
+#summary(C50.model)
+```
+```{r}
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(C50.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(C50.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+C5.0 - training
+accuracy: 0.8771374
+recall: 0.8905545
+precision: 0.9538138
+
+C5.0 - testing
+accuracy: 0.8609703
+recall: 0.8797451
+precision: 0.9441395
+
+
+### NBTree
+```{r}
+library("rJava")
+library("RWekajars")
+library("RWeka")
+```
+
+```{r}
+WPM("refresh-cache")
+WPM("package-info", "repository", "naiveBayesTree")
+WPM("install-package", "naiveBayesTree")
+```
+```{r}
+WOW("weka/classifiers/trees/NBTree")
+```
+```{r}
+NBTree <- make_Weka_classifier("weka/classifiers/trees/NBTree")
+```
+
+```{r}
+# train the model
+NBTree.model <- NBTree(income ~ ., data = train)
+#print(NBTree.model)
+```
+
+```{r}
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(NBTree.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(NBTree.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+NBTree - training
+accuracy: 0.8403004
+recall: 0.9235174
+precision: 0.8587172
+
+NBTree - testing
+accuracy: 0.8338161
+recall: 0.9200249
+precision: 0.8531253
+
+
+### Bootstrapped Aggregation (Bagging)
+```{r}
+library(ipred)
+```
+
+```{r}
+# train the model
+bagging.model <- bagging(income ~ ., data = train)
+
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(bagging.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(bagging.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+Bagging - training
+accuracy: 0.996338
+recall: 0.9960905
+precision: 0.9990507
+
+Bagging - testing
+accuracy: 0.8470673
+recall: 0.8813278
+precision: 0.9205432
+
+
+### Random Forest
+```{r}
+library(randomForest)
+```
+
+```{r}
+# train the model
+randomForest.model <- randomForest(income ~ ., data = train)
+
+# --------------------- Predicting on train data -----------------------------
+prediction <- predict(randomForest.model, train)
+ 
+# Confusion Matrix of train data
+cm <- table(train$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+
+# --------------------- Predicting on test data ------------------------------
+prediction <- predict(randomForest.model, test)
+ 
+# Confusion Matrix of test data
+cm <- table(test$income, prediction)
+accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+recall <- cm[1] / sum(cm[1], cm[2])
+precision <- cm[1] / sum(cm[1], cm[3])
+cm
+accuracy
+recall
+precision
+```
+Random Forest - training
+accuracy: 0.9478944
+recall: 0.9514314
+precision: 0.9807661
+
+Random Forest - testing
+accuracy: 0.8565532
+recall: 0.8801122
+precision: 0.9368198
+
+## Plot of Instances vs Acc
+```{r}
+# library("dplyr")
+# library(caTools)
+# library(naivebayes)
+# library(dplyr)
+# library(ggplot2)
+# library(psych)
+# library(rJava)
+# library(RWeka)
+# library(C50)
+# library(printr)
+
+NB.acc = c()
+C45.acc = c()
+C50.acc = c()
+NBTree.acc = c()
+bagging.acc = c()
+randomForest.acc = c()
+
+for (i in seq(2500, 45000, 2500)) {
+  adult_temp <- sample_n(adult, i)  
+  
+  split <- sample.split(adult_temp$income, SplitRatio = 0.7)
+  train_temp <- subset(adult_temp, split == TRUE)
+  test_temp <- subset(adult_temp, split == FALSE)
+  
+  # Native Bayes
+  NB.model.temp <- naive_bayes(income ~ ., data = train_temp, usekernel = T)
+  prediction <- predict(NB.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  NB.acc <- c(NB.acc, accuracy*100)
+  
+  # C4.5
+  C45.model.temp <- J48(income ~ ., data = train_temp)
+  prediction <- predict(C45.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  C45.acc <- c(C45.acc, accuracy*100)
+
+  # C5.0
+  C50.model.temp <- C5.0(income ~ ., data = train_temp)
+  prediction <- predict(C50.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  C50.acc <- c(C50.acc, accuracy*100)
+ 
+  # NBTree 
+  NBTree.model.temp <- NBTree(income ~ ., data = train_temp)
+  prediction <- predict(NBTree.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  NBTree.acc <- c(NBTree.acc, accuracy*100)
+  
+  # Bagging
+  bagging.model.temp.temp <- bagging(income ~ ., data = train_temp)
+  prediction <- predict(bagging.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  bagging.acc <- c(bagging.acc, accuracy*100)
+  
+  # Random Forest
+  randomForest.model.temp <- randomForest(income ~ ., data = train_temp)
+  prediction <- predict(randomForest.model.temp, test_temp)
+  cm <- table(test_temp$income, prediction)
+  accuracy <- sum(cm[1], cm[4]) / sum(cm[1:4])
+  randomForest.acc <- c(randomForest.acc, accuracy*100)
+}
+
+allmodel.acc <- list(NB.acc, C45.acc, C50.acc, NBTree.acc, bagging.acc, randomForest.acc)
+
+par(mfrow = c(1, 1))
+plot(NA, ylim = c(79, 87), xlim = c(2500, 45000), xlab="Instances", ylab="Accuracy")
+
+mypal <- colorRampPalette( c( "red", "blue", "green", "gold", "darkgreen", "lightskyblue"))(6)
+
+for(i in 1:6){
+  lines(seq(2500, 45000, 2500), allmodel.acc[[i]], type = "l", col = mypal[i], lwd=1.5)
+}
+legend(x = "topleft", lty = c(4,6), cex = 0.5, legend=c("Naive Bayes", "C4.5", "C5.0", "NBTree", "Bagging", "Random Forest"), col = c("red", "blue", "green", "gold", "darkgreen", "lightskyblue"))
+grid(nx = NULL, ny = NULL,
+     lty = 3,      # Grid line type
+     col = "gray", # Grid line color
+     lwd = 1)
+```
+```{r}
+# plot with only Naice-Bayes & C4.5
+twomodel.acc <- list(NB.acc, C45.acc)
+
+par(mfrow = c(1, 1))
+plot(NA, ylim = c(79.5, 87), xlim = c(2500, 45000), xlab="Instances", ylab="Accuracy")
+
+mypal <- colorRampPalette( c( "red", "blue") )(2)
+
+for(i in 1:2){
+  lines(seq(2500, 45000, 2500), twomodel.acc[[i]], type = "l", col = mypal[i], lwd=1.5)
+}
+legend(x = "right", lty = c(4,6), cex = 1, legend=c("Naive Bayes", "C4.5"), col = c("red", "blue"))
+grid(nx = NULL, ny = NULL,
+     lty = 3,      # Grid line type
+     col = "gray", # Grid line color
+     lwd = 1)
+```
+
+```{r}
+# plot with Naice-Bayes, C4.5, NBTree
+threemodel.acc <- list(NB.acc, C45.acc, NBTree.acc)
+
+par(mfrow = c(1, 1))
+plot(NA, ylim = c(79, 87), xlim = c(2500, 45000), xlab="Instances", ylab="Accuracy")
+
+mypal <- colorRampPalette( c( "red", "blue", "gold") )(3)
+
+for(i in 1:3){
+  lines(seq(2500, 45000, 2500), threemodel.acc[[i]], type = "l", col = mypal[i], lwd=1.5)
+}
+legend(x = "right", lty = c(4,6), cex = 1, legend=c("Naive Bayes", "C4.5", "NBTree"), col = c("red", "blue", "gold"))
+grid(nx = NULL, ny = NULL,
+     lty = 3,      # Grid line type
+     col = "gray", # Grid line color
+     lwd = 1)
+```
+
+References:
+Adult Datasets: https://archive.ics.uci.edu/ml/datasets/Adult
+Kaggle: https://www.kaggle.com/code/kazimanil/adult-census-income-classification
+Kaggle (Data Processing + logistic Regression): https://www.kaggle.com/code/flyingwombat/logistic-regression-with-uci-adult-income
+Paper: https://www.aaai.org/Papers/KDD/1996/KDD96-033.pdf
+Naïve Bayes: https://www.r-bloggers.com/2021/04/naive-bayes-classification-in-r/
+C4.5 & C5.0: https://rpubs.com/kjmazidi/195428
+NBTree: https://www.harbu.org/posts/2014-11-26-nbtree-in-R.html
+More Models: https://machinelearningmastery.com/non-linear-classification-in-r-with-decision-trees/
+
+
+
+
+```{r}
+# vector = c()
+# values = c(1.12157347682574, 1.33192942183165, 2.08170603538164, 
+# 3.21936891077735, 3.87674160966784, 4.01222877372179, 3.97721253044977, 
+# 3.92748085243377, 3.89422132704385, 3.87554992373411, 3.86571722337484, 
+# 3.86066855038186, 3.85810016465002, 3.85679624059312, 3.85613341785451, 
+# 3.85579555076542, 3.85562274484616, 3.85553404933868, 3.85548836742791, 
+# 3.85546476209749, 3.85545252710548)
+# # for (i in 1:length(values))
+# #   vector[i] <- values[i]
+# for (i in 1:length(values))
+#   vector <- c(vector, values[i])
+# 
+# vector2 = c()
+# values2 = c(1.10529328957704, 1.31478057418982, 
+# 2.05843350413484, 3.21445290319435, 3.93127780496161, 4.10019570732597, 
+# 4.0548974496435, 3.97577600575589, 3.91388817353566, 3.87397233241435, 
+# 3.85011420707963, 3.83631205949334, 3.82843188274012, 3.82395020512325, 
+# 3.82139984806649, 3.81994467228049, 3.81911146133043, 3.81863258400429, 
+# 3.81835633714707, 3.81819642258335, 3.81810355018493)
+# # for (i in 1:length(values2))
+# #   vector2[i] <- values2[i]
+# for (i in 1:length(values2))
+#   vector2 <- c(vector2, values2[i])
+# 
+# test <- list(vector, vector2)
+# 
+# par(mfrow = c(1, 1))
+# plot(NA, ylim = c(1, 4), xlim = c(0, 10), xlab="Instances", ylab="Accuracy")
+# 
+# mypal <- colorRampPalette( c( "red", "blue" ) )( 2 )
+# 
+# for(i in 1:2){
+#   lines(test[[i]], type = "l", col = mypal[i], , lwd=1.5)
+#   }
+```
+
+```{r}
+# dat <- list(c(1.12157347682574, 1.33192942183165, 2.08170603538164, 
+# 3.21936891077735, 3.87674160966784, 4.01222877372179, 3.97721253044977, 
+# 3.92748085243377, 3.89422132704385, 3.87554992373411, 3.86571722337484, 
+# 3.86066855038186, 3.85810016465002, 3.85679624059312, 3.85613341785451, 
+# 3.85579555076542, 3.85562274484616, 3.85553404933868, 3.85548836742791, 
+# 3.85546476209749, 3.85545252710548), c(1.10529328957704, 1.31478057418982, 
+# 2.05843350413484, 3.21445290319435, 3.93127780496161, 4.10019570732597, 
+# 4.0548974496435, 3.97577600575589, 3.91388817353566, 3.87397233241435, 
+# 3.85011420707963, 3.83631205949334, 3.82843188274012, 3.82395020512325, 
+# 3.82139984806649, 3.81994467228049, 3.81911146133043, 3.81863258400429, 
+# 3.81835633714707, 3.81819642258335, 3.81810355018493), c(1.08732237015566, 
+# 1.29744314553374, 2.03681100176799, 3.18820303674863, 3.90649946705568, 
+# 4.08059333708303, 4.04639279053423, 3.98156199908701, 3.93264549967637, 
+# 3.90244185986869, 3.88514800191734, 3.87554934102343, 3.87028551934942, 
+# 3.86740818622607, 3.86583394198314, 3.86497024645408, 3.86449471113229, 
+# 3.86423191258367, 3.86408614948732, 3.86400502180298, 3.86395972379237
+# ))
+# par(mfrow = c(1, 1))
+# plot(NA, ylim = c(1, 4), xlim = c(0, 10)) #better view over the lines
+# 
+# mypal <- colorRampPalette( c( "red", "green", "blue" ) )( 3 )
+# 
+# for(i in 1:3){
+#   lines(dat[[i]], type = "l", col = mypal[i], , lwd=1.5)
+#   }
+```
+
+
+
+

@@ -1,0 +1,390 @@
+---
+title: "6690 Project"
+author: "Xiaoyue Chen"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+require(Matrix)
+require(data.table)
+require(xgboost)
+require(mltools)
+library(caret)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+##set up
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##data processing
+```{r}
+adult <- read.csv("adult.csv")
+head(adult)
+table(adult$workclass)
+adult$workclass <- as.character(adult$workclass)
+
+adult$workclass[adult$workclass == "Without-pay" | 
+                  adult$workclass == "Never-worked"] <- "Unemployed"
+
+adult$workclass[adult$workclass == "State-gov" |
+                  adult$workclass == "Local-gov"] <- "SL-gov"
+
+adult$workclass[adult$workclass == "Self-emp-inc" |
+                  adult$workclass == "Self-emp-not-inc"] <- "Self-employed"
+
+table(adult$workclass)
+table(adult$marital.status)
+adult$marital.status <- as.character(adult$marital.status)
+
+adult$marital.status[adult$marital.status == "Married-AF-spouse" |
+                       adult$marital.status == "Married-civ-spouse" |
+                       adult$marital.status == "Married-spouse-absent"] <- "Married"
+
+adult$marital.status[adult$marital.status == "Divorced" |
+                       adult$marital.status == "Separated" |
+                       adult$marital.status == "Widowed"] <- "Not-Married"
+table(adult$marital.status)
+```
+-- Country Combining
+```{r}
+adult$native.country <- as.character(adult$native.country)
+
+north.america <- c("Canada", "Cuba", "Dominican-Republic", "El-Salvador", "Guatemala",
+                   "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua",
+                   "Outlying-US(Guam-USVI-etc)", "Puerto-Rico", "Trinadad&Tobago",
+                   "United-States")
+asia <- c("Cambodia", "China", "Hong", "India", "Iran", "Japan", "Laos",
+          "Philippines", "Taiwan", "Thailand", "Vietnam")
+south.america <- c("Columbia", "Ecuador", "Peru")
+europe <- c("England", "France", "Germany", "Greece", "Holand-Netherlands",
+            "Hungary", "Ireland", "Italy", "Poland", "Portugal", "Scotland",
+            "Yugoslavia")
+other <- c("South", "?")
+
+adult$native.country[adult$native.country %in% north.america] <- "North America"
+adult$native.country[adult$native.country %in% asia] <- "Asia"
+adult$native.country[adult$native.country %in% south.america] <- "South America"
+adult$native.country[adult$native.country %in% europe] <- "Europe"
+adult$native.country[adult$native.country %in% other] <- "Other"
+
+table(adult$native.country)
+```
+```{r}
+adult$native.country <- as.factor(adult$native.country)
+adult$marital.status <- as.factor(adult$marital.status)
+adult$workclass <- as.factor(adult$workclass)
+adult$education <- as.factor(adult$education)
+adult$occupation <- as.factor(adult$occupation)
+adult$relationship <- as.factor(adult$relationship)
+adult$race <- as.factor(adult$race)
+adult$gender <- as.factor(adult$gender)
+adult$income <- as.factor(adult$income)
+head(adult)
+
+```
+
+
+-- Dealing with Missing Data
+```{r}
+
+table(adult$workclass)
+```
+```{r}
+adult[adult == "?"] <- NA
+table(adult$workclass)
+```
+```{r}
+# install.packages("Amelia")
+library(Amelia)
+
+colSums(is.na(adult))
+
+missmap(adult, y.at = 1, y.labels = "", col = c("yellow", "black"), legend = TRUE)
+```
+##transform the aldult into df
+```{r}
+df <- data.table(adult, keep.rownames = FALSE)
+```
+
+
+
+
+##data spliting
+```{r}
+library(caret)
+set.seed(3456)
+trainIndex <- createDataPartition(adult$income, p = .8, list = FALSE, times = 1)
+head(trainIndex)
+
+adult.train <- adult[trainIndex,]
+adult.test <- adult[-trainIndex,]
+df.train <- data.table(adult.train, keep.rownames = FALSE)
+df.test <- data.table(adult.test, keep.rownames = FALSE)
+
+```
+
+##get the dimensionality of the datasets
+```{r}
+dim(adult.train)
+dim(adult.test)
+```
+
+
+##one-hot encoding
+```{r}
+df.train.data <- df.train[,-15]
+dummy <- dummyVars("~ .", data = df.train.data)
+sparse_matrix.train <- data.frame(predict(dummy, newdata = df.train.data))
+
+output_vector.train <- as.integer(df.train[, income] == ">50K")
+
+
+```
+
+
+##train the model
+```{r}
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 4,
+               eta = 0.5, nthread = 2, nrounds = 100,objective = "binary:logistic")
+```
+
+##train the model dense matrix with different max depth
+```{r}
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 16,
+               eta = 0.5, nthread = 6, nrounds = 100,objective = "binary:logistic")
+```
+```{r}
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 6,
+               eta = 0.5, nthread = 2, nrounds = 100,objective = "binary:logistic")
+```
+
+##train the model dense with different max depth
+
+```{r}
+
+
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 32,
+               eta = 1, nthread = 2, nrounds = 100,objective = "binary:logistic")
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 48,
+               eta = 1, nthread = 2, nrounds = 100,objective = "binary:logistic")
+```
+#try differnet max depth
+```{r}
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 16,
+               eta = 1, nthread = 2, nrounds = 100,objective = "binary:logistic")
+```
+##try different gamma
+```{r}
+bst <- xgboost(data = as.matrix(sparse_matrix.train), label = output_vector.train, max.depth = 16,
+               eta = 1, nthread = 2, nrounds = 10,objective = "binary:logistic", gamma = 1)
+```
+
+##test the model
+```{r}
+df.test.data <- df.test[,-15]
+dummy.test <- dummyVars("~ .", data = df.test.data)
+sparse_matrix.test <- data.frame(predict(dummy.test, newdata = df.test.data))
+y_test <- as.integer(df.test[, income] == ">50K")
+y_pred <- predict(bst, as.matrix(sparse_matrix.test))
+prediction_XGBoost <- as.numeric(y_pred>0.5)
+XB_err <- mean(as.numeric(y_pred>0.5) != y_test)
+```
+
+
+##train the model using LightGBM
+```{r}
+library(data.table)
+library(Matrix)
+library(dplyr)
+library(MLmetrics)
+library(lightgbm)
+set.seed(257)
+```
+##load the dataset into the LightGBM dataset object
+```{r}
+GBM_train <- lgb.Dataset(data = as.matrix(sparse_matrix.train), label = output_vector.train)
+GBM_test <- lgb.Dataset.create.valid(GBM_train, data = as.matrix(sparse_matrix.test), label = output_vector.test)
+```
+
+##define the params in the model
+```{r}
+params = list(objective = "binary", metric ="binary_logloss" )
+
+#validation data
+valids = list(test = GBM_test)
+```
+
+##train the model
+```{r}
+GBM_model <- lgb.train(params, GBM_train, nrounds = 100, valids,min_data=1, learning_rate=1, early_stopping_rounds = 10)
+```
+```{r}
+#get the error rate
+print(GBM_model$best_score)
+```
+
+#prediction
+```{r}
+y_test <- as.integer(df.test[, income] == ">50K")
+GBM_pred = predict(GBM_model, as.matrix(sparse_matrix.test))
+prediction_GBM <- as.numeric(GBM_pred>0.5)
+GBM_err <- mean(as.numeric(GBM_pred>0.5) != y_test)
+```
+
+#metrics
+```{r}
+#cm
+GBM_cm <- as.matrix(table(Actual = y_test, Predicted = prediction_GBM))
+XG_Boost_cm <- as.matrix(table(Actual = y_test, Predicted = prediction_XGBoost))
+
+#N
+GBM_n <- sum(GBM_cm)
+XG_Boost_n <- sum(XG_Boost_cm)
+
+#diag
+GBM_diag <- diag(GBM_cm)
+XG_Boost_diag <- diag(XG_Boost_cm)
+
+#number of rowsums
+GBM_rowsums = apply(GBM_cm, 1, sum)
+XG_Boost_rowsums = apply(XG_Boost_cm, 1, sum)
+
+#colsums
+GBM_colsums <- apply(GBM_cm, 2, sum)
+XG_Boost_colsums <- apply(XG_Boost_cm, 2, sum)
+
+```
+
+#Accuracy
+```{r}
+GBM_acc <- sum(GBM_diag) / GBM_n
+XG_Boost_acc <- sum(XG_Boost_diag) / XG_Boost_n
+
+GBM_acc
+XG_Boost_acc
+```
+
+#precision
+```{r}
+GBM_prec <- GBM_diag / GBM_colsums
+XGBoost_prec <- XG_Boost_diag / XG_Boost_colsums
+
+GBM_prec
+XGBoost_prec
+```
+
+#recall
+```{r}
+GBM_recall <- GBM_diag / GBM_rowsums
+XGBoost_recall <- XG_Boost_diag / XG_Boost_rowsums
+
+GBM_recall
+XGBoost_recall
+```
+
+#plot graph
+```{r}
+
+accuracy.xgboost <- list( length(50000) )
+accuracy.gbm <- list( length(50000) )
+
+#calculate the accuracy
+for (x in 2500:45000) {
+  test_data <- adult[1:x,]
+  df.test_data <- data.table(test_data[,-15], keep.rownames = FALSE)
+  
+  #one-hot encoding
+  dummy_test <- dummyVars("~ .", data = df.test_data )
+  sparse_matrix.plot <- data.frame(predict(dummy_test, newdata = df.test_data))
+  
+  #xgboost prediction
+  xgboost_pred <- predict(bst, as.matrix(sparse_matrix.plot))
+  xgboost_pred_final <- as.numeric(xgboost_pred>0.5)
+  
+  #light GBM prediction
+  gbm_pred <- predict(GBM_model, as.matrix(sparse_matrix.plot))
+  gbm_pred_final <- as.numeric(gbm_pred>0.5)
+  
+  #calculate the cm
+  test_y_plot <- as.integer(test_data[, 15] == ">50K")
+  #gbm.cm <- as.matrix(table(Actual = test_y_plot, Predicted = gbm_pred_final))
+  #xgboost.cm <- as.matrix(table(Actual = test_y_plot, Predicted = xgboost_pred_final))
+  
+  #store the accuracy
+  #n.gbm <- sum(gbm.cm)
+  #n.xgboost <- sum(xgboost.cm)
+  
+  #diag.gbm <- diag(gbm.cm)
+  #diag.xgboost <- diag(xgboost.cm)
+  
+  #acc.gbm <- sum(diag.gbm) / n.gbm
+  #acc.xgboost <- sum(diag.xgboost) / n.xgboost
+  if (x%%100 == 0) {
+    print(x)
+  }
+  accuracy.xgboost[x] <- Accuracy(xgboost_pred_final, test_y_plot)
+  accuracy.gbm[x] <- Accuracy(gbm_pred_final, test_y_plot)
+  
+}
+```
+#plot the graph
+```{r}
+x = seq(2500,45000,1)
+y_gbm = accuracy.gbm[2500:45000]
+y_xgboost = accuracy.xgboost[2500:45000]
+plot(x, y_gbm,type = 'l',col = 'purple', xlab='Number of Instances', ylab = 'Model accuracy')
+par(new = TRUE)
+plot(x, y_xgboost, type = 'l', col = 'pink', yaxt = 'n', ylab = '', xlab='')
+legend("bottomright",c("Light GBM", "XGBoost"), col=c("purple","pink"), lty=c(1,1))
+```
+#f1 score
+```{r}
+library("MLmetrics")
+f1_xgboost <- F1_Score(y_test,prediction_XGBoost, positive=NULL)
+f1_gbm <- F1_Score(y_test, prediction_GBM, positive = NULL)
+
+f1_xgboost
+f1_gbm
+```
+
+```{r}
+#metrics of the model
+library(caret)
+GBM_cm <- confusionMatrix(factor(prediction_GBM),
+  factor(y_test))
+XG_Boost_cm <- confusionMatrix(factor(prediction_XGBoost), factor(y_test))
+
+#precision
+GBM_prec <- GBM_cm$byClass['Pos Pred Value']
+XGBoost_prec <- XG_Boost_cm$byClass['Pos Pred Value']
+
+GBM_prec
+XGBoost_prec
+
+
+#recall
+GBM_recall <- GBM_cm$byClass['Sensitivity']
+XGBoost_recall <- XG_Boost_cm$byClass['Sensitivity']
+
+GBM_recall
+XGBoost_recall
+
+
+#f1-score
+f1_gbm <- 2 * ((GBM_prec * GBM_recall) / (GBM_prec + GBM_recall))
+f1_xgboost <- 2 * ((XGBoost_prec * XGBoost_recall) / (XGBoost_prec + XGBoost_recall))
+
+f1_gbm
+f1_xgboost
+```
+

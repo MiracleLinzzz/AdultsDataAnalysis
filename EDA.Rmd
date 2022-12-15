@@ -1,0 +1,152 @@
+```{r}
+adult <- read.csv("adult.csv")
+head(adult)
+```
+-- Work Class Combining
+
+```{r}
+table(adult$workclass)
+```
+```{r}
+adult$workclass <- as.character(adult$workclass)
+
+adult$workclass[adult$workclass == "Without-pay" | 
+                  adult$workclass == "Never-worked"] <- "Unemployed"
+
+adult$workclass[adult$workclass == "State-gov" |
+                  adult$workclass == "Local-gov"] <- "SL-gov"
+
+adult$workclass[adult$workclass == "Self-emp-inc" |
+                  adult$workclass == "Self-emp-not-inc"] <- "Self-employed"
+
+table(adult$workclass)
+```
+
+-- Marital Status Combining
+
+```{r}
+table(adult$marital.status)
+```
+```{r}
+adult$marital.status <- as.character(adult$marital.status)
+
+adult$marital.status[adult$marital.status == "Married-AF-spouse" |
+                       adult$marital.status == "Married-civ-spouse" |
+                       adult$marital.status == "Married-spouse-absent"] <- "Married"
+
+adult$marital.status[adult$marital.status == "Divorced" |
+                       adult$marital.status == "Separated" |
+                       adult$marital.status == "Widowed"] <- "Not-Married"
+table(adult$marital.status)
+```
+
+-- Country Combining
+
+```{r}
+adult$native.country <- as.character(adult$native.country)
+
+north.america <- c("Canada", "Cuba", "Dominican-Republic", "El-Salvador", "Guatemala",
+                   "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua",
+                   "Outlying-US(Guam-USVI-etc)", "Puerto-Rico", "Trinadad&Tobago",
+                   "United-States")
+asia <- c("Cambodia", "China", "Hong", "India", "Iran", "Japan", "Laos",
+          "Philippines", "Taiwan", "Thailand", "Vietnam")
+south.america <- c("Columbia", "Ecuador", "Peru")
+europe <- c("England", "France", "Germany", "Greece", "Holand-Netherlands",
+            "Hungary", "Ireland", "Italy", "Poland", "Portugal", "Scotland",
+            "Yugoslavia")
+other <- c("South", "?")
+
+adult$native.country[adult$native.country %in% north.america] <- "North America"
+adult$native.country[adult$native.country %in% asia] <- "Asia"
+adult$native.country[adult$native.country %in% south.america] <- "South America"
+adult$native.country[adult$native.country %in% europe] <- "Europe"
+adult$native.country[adult$native.country %in% other] <- "Other"
+
+table(adult$native.country)
+```
+```{r}
+adult$native.country <- as.factor(adult$native.country)
+adult$marital.status <- as.factor(adult$marital.status)
+adult$workclass <- as.factor(adult$workclass)
+head(adult)
+```
+-- Dealing with Missing Data
+
+```{r}
+table(adult$workclass)
+```
+```{r}
+adult[adult == "?"] <- NA
+table(adult$workclass)
+```
+```{r}
+# install.packages("Amelia")
+library(Amelia)
+```
+
+```{r}
+colSums(is.na(adult))
+```
+
+```{r}
+missmap(adult, y.at = 1, y.labels = "", col = c("yellow", "black"), legend = TRUE)
+```
+```{r}
+# method1: drop rows
+adult <- na.omit(adult)
+
+# method2: KNN (running time error?)
+# as it is observed only the following coloumns have NAs in them, we specifically perform kNN imputation on these 3 variables
+
+# library(VIM)
+# adult<-kNN(adult,variable=c("workclass","occupation"),k=sqrt(nrow(adult)))
+```
+
+```{r}
+colSums(is.na(adult))
+```
+
+```{r}
+missmap(adult, y.at = 1, y.label = "", legend = , col = c("yellow", "black"))
+```
+```{r}
+head(adult)
+```
+ -- EDA
+```{r}
+library(ggplot2)
+barplot(table(adult$income),main = 'Income Classification',col='blue',ylab ='No. of people')
+```
+```{r}
+barplot(table(adult$workclass),main = 'Income Classification w.r.t workclass',
+        col='blue',ylab ='No. of people')
+```
+ 
+```{r}
+ggplot(adult, aes(age)) + geom_histogram(aes(fill = income), color = "black",
+                                         binwidth = 1)
+```
+```{r}
+ggplot(adult, aes(hours.per.week)) + geom_histogram()
+```
+```{r}
+library(data.table)
+setnames(adult, "native.country", "region")
+
+# Reorder factor levels by count
+region.ordered <- reorder(adult$region, adult$region, length)
+region.ordered <- factor(region.ordered, levels = rev(levels(region.ordered)))
+
+ggplot(adult, aes(region.ordered)) + geom_bar(aes(fill = income), color = "black")
+```
+-- Split
+
+```{r}
+library(caTools)
+
+split <- sample.split(adult$income, SplitRatio = 0.7)
+train <- subset(adult, split == TRUE)
+test <- subset(adult, split == FALSE)
+```
+
